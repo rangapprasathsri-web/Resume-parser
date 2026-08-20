@@ -235,19 +235,8 @@ function MainApp() {
 
           {/* Dynamic Page Views */}
           <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 md:px-8 py-6">
-            {/* View 0: Landing Page for Authenticated users if selected */}
-            {currentView === 'landing' && (
-              <div className="-mx-4 sm:-mx-6 md:-mx-8 -my-6">
-                <LandingPage
-                  onGetStarted={() => setCurrentView('new_screening')}
-                  onSignIn={() => setCurrentView('dashboard')}
-                  onOpenDemoWorkspace={() => setCurrentView('dashboard')}
-                />
-              </div>
-            )}
-
             {/* Processing Overlay View */}
-            {processingState && currentView !== 'landing' && (
+            {processingState && (
               <BatchProcessingScreen
                 jobTitle={processingState.jobTitle}
                 total={processingState.total}
