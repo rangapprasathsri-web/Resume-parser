@@ -1,13 +1,12 @@
 import {
   collection,
   doc,
-  setDoc,
+  writeBatch,
   getDoc,
   getDocs,
   deleteDoc,
   query,
   where,
-  orderBy,
 } from 'firebase/firestore';
 import { db } from './firebase';
 import { JobScreeningSession, FinalCandidateAnalysis } from '../types';
@@ -32,24 +31,28 @@ function saveLocalJobs(jobs: JobScreeningSession[]) {
 }
 
 /**
- * Save / Update a Job Screening Session to Firestore and Local Cache
+ * Save / Update a Job Screening Session using atomic batched writes
+ * Persists immediately to local memory cache and executes single-roundtrip Firestore batch commit
  */
 export async function persistJobSession(session: JobScreeningSession, userId?: string): Promise<void> {
+  const startMs = Date.now();
   const sessionWithUser: JobScreeningSession = {
     ...session,
     userId: userId || session.userId,
     updatedAt: new Date().toISOString(),
   };
 
-  // 1. Update local cache
+  // 1. Instant local storage cache update
   const local = getLocalJobs().filter((j) => j.jobId !== session.jobId);
   local.unshift(sessionWithUser);
   saveLocalJobs(local);
 
-  // 2. Persist to Firestore if available
+  // 2. High-performance atomic Firestore batch write (1 network call instead of N+1 sequential writes)
   try {
+    const batch = writeBatch(db);
     const jobRef = doc(db, 'jobs', session.jobId);
-    await setDoc(
+
+    batch.set(
       jobRef,
       {
         jobId: sessionWithUser.jobId,
@@ -61,19 +64,24 @@ export async function persistJobSession(session: JobScreeningSession, userId?: s
         topScore: sessionWithUser.topScore,
         status: sessionWithUser.status,
         parsedJd: sessionWithUser.parsedJd,
+        failedCandidates: sessionWithUser.failedCandidates || null,
         createdAt: sessionWithUser.createdAt,
         updatedAt: sessionWithUser.updatedAt,
       },
       { merge: true }
     );
 
-    // Save individual candidates under subcollection
+    // Add candidate documents to the batch
     for (const candidate of sessionWithUser.candidates) {
       const candRef = doc(db, 'jobs', sessionWithUser.jobId, 'candidates', candidate.candidateId);
-      await setDoc(candRef, candidate, { merge: true });
+      batch.set(candRef, candidate, { merge: true });
     }
+
+    await batch.commit();
+    const duration = Date.now() - startMs;
+    console.log(`[Storage] Firestore atomic batch commit finished in ${duration}ms for ${sessionWithUser.candidates.length} candidates.`);
   } catch (err) {
-    console.warn('Firestore write error (using local cache):', err);
+    console.warn('Firestore batch write notice (persisted in local cache):', err);
   }
 }
 

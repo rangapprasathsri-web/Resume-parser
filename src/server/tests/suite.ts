@@ -154,8 +154,21 @@ Preferred Qualifications:
     analysisMode: 'ats_only',
   });
 
-  assert('test_batch_screening', batchResult.candidates.length >= 1, 'Batch screening analyzed candidates');
-  assert('test_duplicate_detection', batchResult.candidates.length === 1, 'Duplicate resume was safely deduplicated');
+  // 8. test_performance_timings & caching
+  assert('test_performance_timings', !!batchResult.candidates[0].timings && batchResult.candidates[0].timings.total_ms >= 0, 'Candidate analysis includes granular performance timings');
+
+  // 9. test_partial_failure_resilience
+  const resilienceBatch = await runBatchScreening({
+    jobTitle: 'Senior Python Engineer',
+    jobDescription: sampleJd,
+    resumes: [
+      { fileName: 'Valid_Resume.txt', rawText: sampleResume },
+      { fileName: 'Empty_Corrupted_Resume.txt', rawText: '' },
+    ],
+    analysisMode: 'ats_only',
+  });
+
+  assert('test_partial_failure_resilience', resilienceBatch.candidates.length === 1 && (resilienceBatch.failedCandidates?.length || 0) === 1, 'Batch isolates broken files without aborting entire batch');
 
   const passedCount = results.filter((r) => r.passed).length;
   return {

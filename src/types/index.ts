@@ -143,6 +143,18 @@ export interface AgenticAnalysisResult {
   evidenceGrounded: boolean;
 }
 
+export interface PerformanceTimings {
+  extraction_ms: number;
+  segmentation_ms: number;
+  field_parser_ms: number;
+  jd_parser_ms: number;
+  ats_ms: number;
+  openrouter_ms: number;
+  validation_ms: number;
+  firestore_ms: number;
+  total_ms: number;
+}
+
 export interface FinalCandidateAnalysis {
   candidateId: string;
   candidateName: string;
@@ -156,6 +168,7 @@ export interface FinalCandidateAnalysis {
   evidenceGrounded: boolean;
   contentHash: string;
   createdAt: string;
+  timings?: PerformanceTimings;
   ats: AtsResult;
   agentic: AgenticAnalysisResult;
   profile: {
@@ -223,7 +236,13 @@ export interface JobScreeningSession {
   status: 'draft' | 'processing' | 'completed' | 'failed';
   parsedJd: ParsedJobDescription;
   candidates: FinalCandidateAnalysis[];
+  failedCandidates?: Array<{ fileName: string; error: string }>;
   userId?: string;
+  batchTimings?: {
+    totalDurationMs: number;
+    avgCandidateMs: number;
+    concurrencyUsed: number;
+  };
 }
 
 export type AppView =

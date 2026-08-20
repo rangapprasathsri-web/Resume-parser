@@ -160,30 +160,41 @@ export const CandidateDetailView: React.FC<CandidateDetailViewProps> = ({
           </div>
         </div>
 
-        {/* Contact Strip */}
-        <div className="mt-5 pt-4 border-t border-default flex flex-wrap items-center gap-y-2 gap-x-6 text-xs text-secondary font-mono">
-          {candidate.profile.email && (
-            <div className="flex items-center gap-1.5">
-              <Mail className="w-3.5 h-3.5 text-muted" />
-              <span>{candidate.profile.email}</span>
-            </div>
-          )}
-          {candidate.profile.phone && (
-            <div className="flex items-center gap-1.5">
-              <Phone className="w-3.5 h-3.5 text-muted" />
-              <span>{candidate.profile.phone}</span>
-            </div>
-          )}
-          {candidate.profile.location && (
-            <div className="flex items-center gap-1.5">
-              <MapPin className="w-3.5 h-3.5 text-muted" />
-              <span>{candidate.profile.location}</span>
-            </div>
-          )}
-          {candidate.profile.linkedinUrl && (
-            <div className="flex items-center gap-1.5">
-              <Linkedin className="w-3.5 h-3.5 text-muted" />
-              <span>{candidate.profile.linkedinUrl}</span>
+        {/* Contact & Latency Strip */}
+        <div className="mt-5 pt-4 border-t border-default flex flex-wrap items-center justify-between gap-y-2 gap-x-6 text-xs text-secondary font-mono">
+          <div className="flex flex-wrap items-center gap-y-2 gap-x-6">
+            {candidate.profile.email && (
+              <div className="flex items-center gap-1.5">
+                <Mail className="w-3.5 h-3.5 text-muted" />
+                <span>{candidate.profile.email}</span>
+              </div>
+            )}
+            {candidate.profile.phone && (
+              <div className="flex items-center gap-1.5">
+                <Phone className="w-3.5 h-3.5 text-muted" />
+                <span>{candidate.profile.phone}</span>
+              </div>
+            )}
+            {candidate.profile.location && (
+              <div className="flex items-center gap-1.5">
+                <MapPin className="w-3.5 h-3.5 text-muted" />
+                <span>{candidate.profile.location}</span>
+              </div>
+            )}
+            {candidate.profile.linkedinUrl && (
+              <div className="flex items-center gap-1.5">
+                <Linkedin className="w-3.5 h-3.5 text-muted" />
+                <span>{candidate.profile.linkedinUrl}</span>
+              </div>
+            )}
+          </div>
+
+          {candidate.timings && (
+            <div className="flex items-center gap-2 text-[11px] font-mono text-muted bg-surface-sunken px-2.5 py-1 rounded border border-default">
+              <Zap className="w-3 h-3 text-amber-500" />
+              <span>
+                ATS: {candidate.timings.ats_ms}ms • Ext: {candidate.timings.extraction_ms}ms • Total: {candidate.timings.total_ms}ms
+              </span>
             </div>
           )}
         </div>

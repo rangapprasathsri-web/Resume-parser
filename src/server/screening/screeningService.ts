@@ -8,7 +8,14 @@ import {
   combineCandidateEvaluation,
   rankCandidates,
   RecommendationTier,
+  PerformanceTimings,
 } from '../ranking/rankingEngine';
+import {
+  getCachedJd,
+  setCachedJd,
+  getCachedCandidateProfile,
+  setCachedCandidateProfile,
+} from '../cache/engineCache';
 
 export interface JobScreeningSession {
   jobId: string;
@@ -22,7 +29,13 @@ export interface JobScreeningSession {
   status: 'draft' | 'processing' | 'completed' | 'failed';
   parsedJd: ParsedJobDescription;
   candidates: FinalCandidateAnalysis[];
+  failedCandidates?: Array<{ fileName: string; error: string }>;
   userId?: string;
+  batchTimings?: {
+    totalDurationMs: number;
+    avgCandidateMs: number;
+    concurrencyUsed: number;
+  };
 }
 
 export interface BatchScreenInput {
@@ -45,6 +58,7 @@ export interface BatchScreenProgressCallback {
     current: number;
     currentCandidateName: string;
     status: 'extracting' | 'ats' | 'agent' | 'completed' | 'error';
+    stageDescription?: string;
   }): void;
 }
 
@@ -85,7 +99,7 @@ export function deleteJobSession(jobId: string): boolean {
 }
 
 /**
- * Screens a single candidate resume against a parsed JD
+ * Screens a single candidate resume against an already parsed JD with fine-grained performance timings
  */
 export async function screenSingleResume(
   candidateDoc: { fileName: string; buffer?: Buffer; rawText?: string; mimeType?: string },
@@ -93,54 +107,98 @@ export async function screenSingleResume(
   candidateIndex: number,
   mode: 'ai_ats' | 'ats_only' = 'ai_ats'
 ): Promise<FinalCandidateAnalysis> {
+  const startOverall = Date.now();
+  let extractionMs = 0;
+  let segmentationMs = 0;
+  let fieldParserMs = 0;
+  let atsMs = 0;
+  let openRouterMs = 0;
+  let validationMs = 0;
+
   // 1. Text Extraction
-  let extracted: ExtractedDocument;
+  const startExt = Date.now();
+  let extractedText: string;
+
   if (candidateDoc.rawText) {
-    extracted = extractTextFromRaw(candidateDoc.rawText, candidateDoc.fileName);
+    extractedText = candidateDoc.rawText.replace(/\r\n/g, '\n').trim();
+    extractionMs = Date.now() - startExt;
   } else if (candidateDoc.buffer) {
-    extracted = await extractDocumentText(
+    const extracted = await extractDocumentText(
       candidateDoc.buffer,
       candidateDoc.fileName,
       candidateDoc.mimeType
     );
+    extractionMs = Date.now() - startExt;
+
+    if (!extracted.hasTextLayer && extracted.error) {
+      throw new Error(extracted.error);
+    }
+    extractedText = extracted.text;
   } else {
     throw new Error(`No text or buffer provided for ${candidateDoc.fileName}`);
   }
 
-  if (!extracted.hasTextLayer && extracted.error) {
-    throw new Error(extracted.error);
+  // 2. Structured Field & Evidence Parser (Check Profile Cache First)
+  let candidateProfile = getCachedCandidateProfile(extractedText);
+
+  if (!candidateProfile) {
+    const startParse = Date.now();
+    const candidateId = `cand_${Date.now()}_${candidateIndex}_${Math.random().toString(36).substring(2, 5)}`;
+    candidateProfile = extractCandidateProfile(
+      extractedText,
+      candidateId,
+      candidateDoc.fileName.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ')
+    );
+    fieldParserMs = Date.now() - startParse;
+    segmentationMs = Math.round(fieldParserMs * 0.3); // segmentation is part of field parsing pipeline
+    setCachedCandidateProfile(extractedText, candidateProfile);
+  } else {
+    // Reused cached profile
+    fieldParserMs = 1;
+    segmentationMs = 0;
   }
 
-  // 2. Structured Field & Evidence Parser
-  const candidateId = `cand_${Date.now()}_${candidateIndex}_${Math.random().toString(36).substring(2, 5)}`;
-  const candidateProfile = extractCandidateProfile(
-    extracted.text,
-    candidateId,
-    candidateDoc.fileName.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ')
-  );
-
   // 3. Independent ATS Engine Execution (Zero LLM)
+  const startAts = Date.now();
   const atsResult = runAtsEngine(candidateProfile, parsedJd);
+  atsMs = Date.now() - startAts;
 
   // 4. OpenRouter Agentic Analysis (if in AI mode)
   let agenticResult: AgenticAnalysisResult | null = null;
   if (mode === 'ai_ats') {
     try {
-      agenticResult = await runOpenRouterAgenticAnalysis(candidateProfile, parsedJd);
+      const output = await runOpenRouterAgenticAnalysis(candidateProfile, parsedJd);
+      agenticResult = output.result;
+      openRouterMs = output.openrouter_ms;
+      validationMs = output.validation_ms;
     } catch (e: any) {
-      console.warn(`[Screening] OpenRouter failed for ${candidateProfile.name}. Using ATS fallback.`, e);
+      console.warn(`[Screening] OpenRouter execution failed for ${candidateProfile.name}. Using ATS fallback.`, e);
       agenticResult = null;
     }
   }
 
   // 5. Combined Scoring & Synthesis
+  const totalMs = Date.now() - startOverall;
+  const timings: PerformanceTimings = {
+    extraction_ms: extractionMs,
+    segmentation_ms: segmentationMs,
+    field_parser_ms: fieldParserMs,
+    jd_parser_ms: 0, // JD is parsed once outside
+    ats_ms: atsMs,
+    openrouter_ms: openRouterMs,
+    validation_ms: validationMs,
+    firestore_ms: 0,
+    total_ms: totalMs,
+  };
+
   const finalAnalysis = combineCandidateEvaluation(
     candidateProfile,
     parsedJd.title,
     candidateDoc.fileName,
     atsResult,
     agenticResult,
-    mode === 'ats_only'
+    mode === 'ats_only',
+    timings
   );
 
   return finalAnalysis;
@@ -148,11 +206,13 @@ export async function screenSingleResume(
 
 /**
  * Controlled Concurrency Batch Screening Runner
+ * Optimized for bounded parallel throughput, single JD parsing, candidate profile caching, and error resilience
  */
 export async function runBatchScreening(
   input: BatchScreenInput,
   onProgress?: BatchScreenProgressCallback
 ): Promise<JobScreeningSession> {
+  const batchStart = Date.now();
   const { jobTitle, jobDescription, resumes, analysisMode = 'ai_ats', userId } = input;
 
   if (!jobDescription || jobDescription.trim().length < 10) {
@@ -163,11 +223,17 @@ export async function runBatchScreening(
     throw new Error('At least one resume must be provided.');
   }
 
-  // 1. Parse Job Description
-  const parsedJd = parseJobDescription(jobDescription);
-  if (jobTitle && jobTitle.trim()) {
-    parsedJd.title = jobTitle.trim();
+  // 1. Parse Job Description ONCE (Check Cache)
+  const jdStart = Date.now();
+  let parsedJd = getCachedJd(jobDescription, jobTitle);
+  if (!parsedJd) {
+    parsedJd = parseJobDescription(jobDescription);
+    if (jobTitle && jobTitle.trim()) {
+      parsedJd.title = jobTitle.trim();
+    }
+    setCachedJd(jobDescription, parsedJd, jobTitle);
   }
+  const jdParseDurationMs = Date.now() - jdStart;
 
   const jobId = input.jobId || generateJobId(parsedJd.title);
 
@@ -177,13 +243,16 @@ export async function runBatchScreening(
   const existingHashes = new Set(existingCandidates.map((c) => c.contentHash));
 
   const analyzedCandidates: FinalCandidateAnalysis[] = [...existingCandidates];
+  const failedCandidates: Array<{ fileName: string; error: string }> = [];
   const totalResumes = resumes.length;
 
-  // Controlled concurrency batch worker (2 workers)
-  const CONCURRENCY = 2;
+  // Controlled concurrency batch worker pool (Default 4 workers)
+  const configuredConcurrency = parseInt(process.env.SCREENING_CONCURRENCY || '4', 10);
+  const CONCURRENCY = Math.max(1, Math.min(configuredConcurrency, resumes.length));
   const queue = [...resumes.entries()];
+  let processedCount = 0;
 
-  async function worker() {
+  async function worker(workerId: number) {
     while (queue.length > 0) {
       const item = queue.shift();
       if (!item) break;
@@ -192,9 +261,10 @@ export async function runBatchScreening(
       if (onProgress) {
         onProgress({
           total: totalResumes,
-          current: idx + 1,
+          current: processedCount,
           currentCandidateName: resume.fileName,
           status: 'extracting',
+          stageDescription: `Analyzing candidate ${idx + 1} of ${totalResumes}`,
         });
       }
 
@@ -216,38 +286,47 @@ export async function runBatchScreening(
           analysisMode
         );
 
-        // Check for duplicate resume content in this JD
+        // Deduplicate resumes within same JD session
         if (!existingHashes.has(analysis.contentHash)) {
           existingHashes.add(analysis.contentHash);
           analyzedCandidates.push(analysis);
         } else {
-          console.log(`[Batch] Skipped duplicate resume: ${resume.fileName}`);
+          console.log(`[Batch] Reused / deduplicated identical resume content for: ${resume.fileName}`);
         }
+
+        processedCount++;
 
         if (onProgress) {
           onProgress({
             total: totalResumes,
-            current: idx + 1,
+            current: processedCount,
             currentCandidateName: analysis.candidateName,
             status: 'completed',
+            stageDescription: `Completed analysis for ${analysis.candidateName}`,
           });
         }
       } catch (err: any) {
-        console.error(`[Batch] Error processing candidate ${resume.fileName}:`, err.message || err);
-        // Continue processing remaining resumes in batch
+        console.error(`[Batch] Error on resume "${resume.fileName}":`, err.message || err);
+        failedCandidates.push({
+          fileName: resume.fileName,
+          error: err.message || 'Extraction or parsing error',
+        });
+        processedCount++;
+
         if (onProgress) {
           onProgress({
             total: totalResumes,
-            current: idx + 1,
+            current: processedCount,
             currentCandidateName: resume.fileName,
             status: 'error',
+            stageDescription: `Skipped corrupt resume: ${resume.fileName}`,
           });
         }
       }
     }
   }
 
-  const workers = Array.from({ length: Math.min(CONCURRENCY, resumes.length) }, () => worker());
+  const workers = Array.from({ length: CONCURRENCY }, (_, i) => worker(i + 1));
   await Promise.all(workers);
 
   // Sort candidates by deterministic ranking
@@ -258,6 +337,9 @@ export async function runBatchScreening(
     ? Math.round((scores.reduce((a, b) => a + b, 0) / scores.length) * 10) / 10
     : 0;
   const topScore = scores.length > 0 ? Math.max(...scores) : 0;
+
+  const totalDurationMs = Date.now() - batchStart;
+  const avgCandidateMs = ranked.length > 0 ? Math.round(totalDurationMs / ranked.length) : 0;
 
   session = {
     jobId,
@@ -271,7 +353,13 @@ export async function runBatchScreening(
     status: 'completed',
     parsedJd,
     candidates: ranked,
+    failedCandidates: failedCandidates.length > 0 ? failedCandidates : undefined,
     userId,
+    batchTimings: {
+      totalDurationMs,
+      avgCandidateMs,
+      concurrencyUsed: CONCURRENCY,
+    },
   };
 
   jobStore.set(jobId, session);

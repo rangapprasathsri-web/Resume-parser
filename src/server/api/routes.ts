@@ -13,7 +13,9 @@ import { parseJobDescription } from '../ats/jdParser';
 import { extractDocumentText } from '../extraction/extractor';
 import { rankCandidates } from '../ranking/rankingEngine';
 import { runAllTests } from '../tests/suite';
+import { runComprehensiveBenchmarks } from '../tests/performanceBenchmarks';
 import { validateOpenRouterCredentials } from '../agent/openrouter';
+import { getCacheStats, clearEngineCache } from '../cache/engineCache';
 
 export const apiRouter = Router();
 
@@ -29,9 +31,37 @@ apiRouter.get('/openrouter/validate', async (_req: Request, res: Response) => {
   }
 });
 
+/**
+ * Engine Performance & Latency Benchmarks
+ */
+apiRouter.get('/benchmarks', async (_req: Request, res: Response) => {
+  try {
+    const benchmarkResults = await runComprehensiveBenchmarks();
+    res.json({
+      success: true,
+      data: benchmarkResults,
+      cacheStats: getCacheStats(),
+    });
+  } catch (err: any) {
+    console.error('Benchmark execution error:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
 
 /**
- * Run automated tests
+ * Cache Management
+ */
+apiRouter.get('/cache/stats', (_req: Request, res: Response) => {
+  res.json({ success: true, data: getCacheStats() });
+});
+
+apiRouter.post('/cache/clear', (_req: Request, res: Response) => {
+  clearEngineCache();
+  res.json({ success: true, message: 'Engine caches cleared successfully.' });
+});
+
+/**
+ * Run automated unit/integration tests
  */
 apiRouter.get('/test-suite', async (_req: Request, res: Response) => {
   try {
@@ -49,11 +79,13 @@ apiRouter.get('/health', (_req: Request, res: Response) => {
   const hasOpenRouterKey = !!process.env.OPENROUTER_API_KEY;
   res.json({
     status: 'ok',
-    engine: 'EvidenceFirst Hybrid Screening Agent',
+    engine: 'EvidenceFirst Optimized Screening Engine',
     openrouterAvailable: hasOpenRouterKey,
-    defaultModel: process.env.OPENROUTER_MODEL || 'anthropic/claude-3.5-sonnet',
+    defaultModel: process.env.OPENROUTER_MODEL || 'openai/gpt-oss-20b:free',
     atsWeight: process.env.ATS_WEIGHT || '0.40',
     agentWeight: process.env.AGENT_WEIGHT || '0.60',
+    concurrency: process.env.SCREENING_CONCURRENCY || '4',
+    cache: getCacheStats(),
     timestamp: new Date().toISOString(),
   });
 });

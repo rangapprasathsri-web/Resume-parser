@@ -11,6 +11,18 @@ export type RecommendationTier =
 
 export type AnalysisMode = 'openrouter' | 'ats_fallback' | 'ats_only';
 
+export interface PerformanceTimings {
+  extraction_ms: number;
+  segmentation_ms: number;
+  field_parser_ms: number;
+  jd_parser_ms: number;
+  ats_ms: number;
+  openrouter_ms: number;
+  validation_ms: number;
+  firestore_ms: number;
+  total_ms: number;
+}
+
 export interface FinalCandidateAnalysis {
   candidateId: string;
   candidateName: string;
@@ -24,6 +36,7 @@ export interface FinalCandidateAnalysis {
   evidenceGrounded: boolean;
   contentHash: string;
   createdAt: string;
+  timings?: PerformanceTimings;
 
   // Detailed breakdowns
   ats: AtsResult;
@@ -58,7 +71,8 @@ export function combineCandidateEvaluation(
   fileName: string,
   atsResult: AtsResult,
   agenticResult: AgenticAnalysisResult | null,
-  forceAtsOnly: boolean = false
+  forceAtsOnly: boolean = false,
+  timings?: PerformanceTimings
 ): FinalCandidateAnalysis {
   const atsWeight = parseFloat(process.env.ATS_WEIGHT || '0.40');
   const agentWeight = parseFloat(process.env.AGENT_WEIGHT || '0.60');
@@ -103,6 +117,7 @@ export function combineCandidateEvaluation(
     evidenceGrounded: true,
     contentHash: candidate.contentHash,
     createdAt: new Date().toISOString(),
+    timings,
     ats: atsResult,
     agentic: finalAgenticResult,
     profile: candidate,

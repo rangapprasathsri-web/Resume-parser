@@ -168,6 +168,19 @@ export function runAtsEngine(
     let evidenceFieldId = 'SKILLS_LIST';
     let evidenceQuote = '';
 
+    // Evaluate any embedded technical keywords in all requirement lines
+    if (req.keywords && req.keywords.length > 0) {
+      for (const kw of req.keywords) {
+        const check = matchKeyword(kw, candidate.rawText, candidate.skills);
+        if (check.matched) {
+          matchedKeywordsSet.add(kw);
+          foundKeywordsForReq.push(check.matchedAs);
+        } else {
+          missingKeywordsSet.add(kw);
+        }
+      }
+    }
+
     if (req.category === 'EXPERIENCE') {
       evidenceFieldId = 'YEARS_EXPERIENCE';
       const candidateYears = candidate.yearsOfExperienceNum;
