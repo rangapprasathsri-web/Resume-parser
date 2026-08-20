@@ -26,6 +26,7 @@ export const TopBar: React.FC<TopBarProps> = ({
   onOpenMobileSidebar,
 }) => {
   const tabs = [
+    { id: 'landing' as AppView, label: 'Landing' },
     { id: 'dashboard' as AppView, label: 'Dashboard' },
     { id: 'new_screening' as AppView, label: 'New Screening' },
     { id: 'history' as AppView, label: 'Workspaces' },

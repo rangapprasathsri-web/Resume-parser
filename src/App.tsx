@@ -24,14 +24,15 @@ import { LoginScreen } from './components/auth/LoginScreen';
 import { SignupScreen } from './components/auth/SignupScreen';
 import { ForgotPasswordScreen } from './components/auth/ForgotPasswordScreen';
 import { ProtectedRoute } from './components/auth/ProtectedRoute';
+import { LandingPage } from './components/landing/LandingPage';
 
-type AuthView = 'login' | 'signup' | 'forgot_password';
+type AuthView = 'landing' | 'login' | 'signup' | 'forgot_password';
 
 function MainApp() {
   const { user } = useAuth();
 
-  // Auth screen sub-view navigation
-  const [authView, setAuthView] = useState<AuthView>('login');
+  // Auth screen sub-view navigation (defaults to landing page)
+  const [authView, setAuthView] = useState<AuthView>('landing');
 
   // Theme state
   const [theme, setTheme] = useState<ThemeMode>(() => {
@@ -170,10 +171,20 @@ function MainApp() {
   };
 
   const renderAuthFallback = () => {
+    if (authView === 'landing') {
+      return (
+        <LandingPage
+          onGetStarted={() => setAuthView('signup')}
+          onSignIn={() => setAuthView('login')}
+          onOpenDemoWorkspace={() => setAuthView('login')}
+        />
+      );
+    }
     if (authView === 'signup') {
       return (
         <SignupScreen
           onNavigateToLogin={() => setAuthView('login')}
+          onBackToLanding={() => setAuthView('landing')}
           theme={theme}
           onToggleTheme={handleToggleTheme}
         />
@@ -192,6 +203,7 @@ function MainApp() {
       <LoginScreen
         onNavigateToSignup={() => setAuthView('signup')}
         onNavigateToForgotPassword={() => setAuthView('forgot_password')}
+        onBackToLanding={() => setAuthView('landing')}
         theme={theme}
         onToggleTheme={handleToggleTheme}
       />
@@ -223,8 +235,19 @@ function MainApp() {
 
           {/* Dynamic Page Views */}
           <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 md:px-8 py-6">
+            {/* View 0: Landing Page for Authenticated users if selected */}
+            {currentView === 'landing' && (
+              <div className="-mx-4 sm:-mx-6 md:-mx-8 -my-6">
+                <LandingPage
+                  onGetStarted={() => setCurrentView('new_screening')}
+                  onSignIn={() => setCurrentView('dashboard')}
+                  onOpenDemoWorkspace={() => setCurrentView('dashboard')}
+                />
+              </div>
+            )}
+
             {/* Processing Overlay View */}
-            {processingState && (
+            {processingState && currentView !== 'landing' && (
               <BatchProcessingScreen
                 jobTitle={processingState.jobTitle}
                 total={processingState.total}

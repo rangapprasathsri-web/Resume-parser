@@ -33,6 +33,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   const navItems = [
     {
+      id: 'landing' as AppView,
+      label: 'Landing Page',
+      icon: FileText,
+      description: 'Product overview & features',
+    },
+    {
       id: 'dashboard' as AppView,
       label: 'Agent Dashboard',
       icon: LayoutDashboard,

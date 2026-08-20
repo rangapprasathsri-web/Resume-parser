@@ -246,6 +246,7 @@ export interface JobScreeningSession {
 }
 
 export type AppView =
+  | 'landing'
   | 'dashboard'
   | 'new_screening'
   | 'job_workspace'

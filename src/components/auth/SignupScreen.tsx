@@ -18,12 +18,14 @@ import { ThemeMode } from '../../types';
 
 interface SignupScreenProps {
   onNavigateToLogin: () => void;
+  onBackToLanding?: () => void;
   theme: ThemeMode;
   onToggleTheme: () => void;
 }
 
 export const SignupScreen: React.FC<SignupScreenProps> = ({
   onNavigateToLogin,
+  onBackToLanding,
   theme,
   onToggleTheme,
 }) => {
@@ -85,6 +87,15 @@ export const SignupScreen: React.FC<SignupScreenProps> = ({
       {/* Top Bar */}
       <header className="w-full px-6 py-4 flex items-center justify-between border-b border-default bg-surface">
         <div className="flex items-center gap-2.5">
+          {onBackToLanding && (
+            <button
+              type="button"
+              onClick={onBackToLanding}
+              className="text-xs text-secondary hover:text-primary font-medium px-2.5 py-1 rounded-[6px] border border-default hover:bg-surface-sunken transition-colors mr-2 cursor-pointer"
+            >
+              ← Landing Page
+            </button>
+          )}
           <div className="w-7 h-7 rounded-[6px] bg-accent flex items-center justify-center text-white">
             <FileText className="w-4 h-4" strokeWidth={2} />
           </div>
