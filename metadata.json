@@ -1,0 +1,6 @@
+{
+  "name": "EvidenceFirst Resume Parser & Fit Analyzer",
+  "description": "Recruiter intelligence tool that parses resume fields with quoted source evidence and cross-links requirement-by-requirement fit reports.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

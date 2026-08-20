@@ -1,0 +1,132 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --bg-base: #FAFAF9;
+    --bg-surface: #FFFFFF;
+    --bg-surface-sunken: #F4F4F3;
+    --border-default: #E5E4E1;
+    --border-strong: #D3D1CC;
+    --text-primary: #1C1B1A;
+    --text-secondary: #6B6963;
+    --text-muted: #9A9890;
+    --accent: #4338CA;
+    --accent-hover: #362DA6;
+    --accent-subtle-bg: #EEEDFC;
+    --status-found-bg: #E7F5EC;
+    --status-found-text: #1E7A45;
+    --status-ambiguous-bg: #FDF3E3;
+    --status-ambiguous-text: #96690B;
+    --status-missing-bg: #F3EFEF;
+    --status-missing-text: #8A5A56;
+    --fallback-bg: #EEEDEB;
+    --fallback-text: #57554F;
+  }
+
+  .dark {
+    --bg-base: #171615;
+    --bg-surface: #1F1E1C;
+    --bg-surface-sunken: #262523;
+    --border-default: #34322F;
+    --border-strong: #45433F;
+    --text-primary: #F2F1EE;
+    --text-secondary: #B3B0A8;
+    --text-muted: #7C7A73;
+    --accent: #8B87F3;
+    --accent-hover: #A19DF6;
+    --accent-subtle-bg: #2A2860;
+    --status-found-bg: #16301F;
+    --status-found-text: #6FCE93;
+    --status-ambiguous-bg: #332708;
+    --status-ambiguous-text: #E3AE4E;
+    --status-missing-bg: #2E2523;
+    --status-missing-text: #C99A95;
+    --fallback-bg: #2A2926;
+    --fallback-text: #ADAAA2;
+  }
+
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background-color: var(--bg-base);
+    color: var(--text-primary);
+  }
+
+  code, pre, .font-mono {
+    font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  }
+}
+
+/* Design Token Utility Classes */
+.bg-base { background-color: var(--bg-base); }
+.bg-surface { background-color: var(--bg-surface); }
+.bg-surface-sunken { background-color: var(--bg-surface-sunken); }
+
+.border-default { border-color: var(--border-default); }
+.border-strong { border-color: var(--border-strong); }
+
+.text-primary { color: var(--text-primary); }
+.text-secondary { color: var(--text-secondary); }
+.text-muted { color: var(--text-muted); }
+
+.bg-accent { background-color: var(--accent); }
+.bg-accent-hover:hover { background-color: var(--accent-hover); }
+.bg-accent-subtle { background-color: var(--accent-subtle-bg); }
+.text-accent { color: var(--accent); }
+.border-accent { border-color: var(--accent); }
+
+/* Status Tokens */
+.bg-status-found { background-color: var(--status-found-bg); }
+.text-status-found { color: var(--status-found-text); }
+.border-status-found { border-color: var(--status-found-text); }
+
+.bg-status-ambiguous { background-color: var(--status-ambiguous-bg); }
+.text-status-ambiguous { color: var(--status-ambiguous-text); }
+.border-status-ambiguous { border-color: var(--status-ambiguous-text); }
+
+.bg-status-missing { background-color: var(--status-missing-bg); }
+.text-status-missing { color: var(--status-missing-text); }
+.border-status-missing { border-color: var(--status-missing-text); }
+
+.bg-fallback { background-color: var(--fallback-bg); }
+.text-fallback { color: var(--fallback-text); }
+
+/* Cross-link Target Flash Animation */
+@keyframes evidencePulse {
+  0% {
+    background-color: var(--accent-subtle-bg);
+    outline: 2px solid var(--accent);
+    transform: scale(1.008);
+  }
+  50% {
+    background-color: var(--accent-subtle-bg);
+    outline: 1.5px solid var(--accent);
+  }
+  100% {
+    background-color: var(--bg-surface);
+    outline: 1px solid var(--border-default);
+    transform: scale(1);
+  }
+}
+
+.highlight-flash {
+  animation: evidencePulse 2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Subtle scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}

@@ -1,0 +1,91 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "User profile records stored upon registration or login",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "description": "Firebase Auth user identifier"
+        },
+        "displayName": {
+          "type": "string",
+          "description": "User display name"
+        },
+        "email": {
+          "type": "string",
+          "description": "User email address"
+        },
+        "photoURL": {
+          "type": "string",
+          "description": "Profile picture URL"
+        },
+        "provider": {
+          "type": "string",
+          "description": "Auth provider identifier"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "lastLoginAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["uid", "email"]
+    },
+    "JobWorkspace": {
+      "title": "JobWorkspace",
+      "description": "JD Screening workspace session",
+      "type": "object",
+      "properties": {
+        "jobId": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "userId": { "type": "string" },
+        "candidateCount": { "type": "number" },
+        "averageScore": { "type": "number" },
+        "topScore": { "type": "number" },
+        "status": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["jobId", "title", "description", "userId"]
+    },
+    "CandidateEvaluation": {
+      "title": "CandidateEvaluation",
+      "description": "Analyzed candidate record for a specific job screening session",
+      "type": "object",
+      "properties": {
+        "candidateId": { "type": "string" },
+        "candidateName": { "type": "string" },
+        "jobId": { "type": "string" },
+        "userId": { "type": "string" },
+        "atsScore": { "type": "number" },
+        "agenticScore": { "type": "number" },
+        "comprehensiveScore": { "type": "number" },
+        "recommendation": { "type": "string" },
+        "analysisMode": { "type": "string" },
+        "contentHash": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["candidateId", "candidateName", "comprehensiveScore", "recommendation"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "User profile collection indexed by Firebase Auth UID"
+    },
+    "/jobs/{jobId}": {
+      "schema": "JobWorkspace",
+      "description": "Job screening sessions created by users"
+    },
+    "/jobs/{jobId}/candidates/{candidateId}": {
+      "schema": "CandidateEvaluation",
+      "description": "Individual candidate screening results under a job workspace"
+    }
+  }
+}
