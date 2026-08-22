@@ -170,6 +170,32 @@ Preferred Qualifications:
 
   assert('test_partial_failure_resilience', resilienceBatch.candidates.length === 1 && (resilienceBatch.failedCandidates?.length || 0) === 1, 'Batch isolates broken files without aborting entire batch');
 
+  // 10. test_append_resumes_preserves_jd_without_reprompting
+  const mockSecondResume = `Elena Rostova
+elena.rostova@example.com | (555) 987-6543 | Seattle, WA
+SUMMARY
+Senior Cloud & Backend Engineer with 6 years experience in Python, FastAPI, Docker, and AWS Terraform.
+EXPERIENCE
+Cloud Engineer at AWS Cloud Inc (2020-Present)
+- Developed automated deployment microservices with Python and Kubernetes on AWS.
+SKILLS
+Python, FastAPI, AWS, Docker, Kubernetes, Terraform, PostgreSQL
+`;
+
+  const secondProfile = extractCandidateProfile(mockSecondResume, 'cand_test_002');
+  const secondAts = runAtsEngine(secondProfile, parsedJd);
+  const secondCombined = combineCandidateEvaluation(
+    secondProfile,
+    parsedJd.title,
+    'Elena_Rostova.txt',
+    secondAts,
+    null,
+    true
+  );
+
+  const updatedCohort = rankCandidates([combined, secondCombined]);
+  assert('test_append_resumes_preserves_jd_without_reprompting', updatedCohort.length === 2, 'Appending new resume to session re-ranks full cohort using original JD criteria');
+
   const passedCount = results.filter((r) => r.passed).length;
   return {
     total: results.length,

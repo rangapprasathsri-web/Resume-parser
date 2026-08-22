@@ -246,8 +246,8 @@ export async function runBatchScreening(
   const failedCandidates: Array<{ fileName: string; error: string }> = [];
   const totalResumes = resumes.length;
 
-  // Controlled concurrency batch worker pool (Default 4 workers)
-  const configuredConcurrency = parseInt(process.env.SCREENING_CONCURRENCY || '4', 10);
+  // Controlled concurrency batch worker pool (Default 8 workers for sub-second execution)
+  const configuredConcurrency = parseInt(process.env.SCREENING_CONCURRENCY || '8', 10);
   const CONCURRENCY = Math.max(1, Math.min(configuredConcurrency, resumes.length));
   const queue = [...resumes.entries()];
   let processedCount = 0;

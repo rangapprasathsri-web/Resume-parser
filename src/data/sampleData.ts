@@ -128,3 +128,77 @@ CERTIFICATIONS
 - AWS Certified Solutions Architect – Professional
 - Certified Kubernetes Administrator (CKA)
 `;
+
+export const REAL_RESUME_4_BROKEN = `Jordan Blake
+jordan.b.developer@inbox.com | Seattle, WA
+
+SUMMARY
+Experienced builder interested in technology and systems.
+
+EXPERIENCE
+Developer - Freelance (2022 - Present)
+- Worked on various web apps and custom scripts for small business clients.
+- Built web pages using HTML, CSS, JavaScript and some backend scripting.
+- Configured local servers and databases.
+
+SKILLS
+JavaScript, Web Development, Databases, Scripting, Problem Solving, Communication
+`;
+
+export const REAL_RESUME_5_CAREER_SWITCH = `Maya Lin
+maya.lin.data@outlook.com | (510) 555-9281 | Oakland, CA | github.com/mayalindata
+
+PROFESSIONAL SUMMARY
+Former Mechanical Systems Engineer (5 years) transitioned to Data & Software Engineering. 2 years of production experience writing Python data transformation pipelines, automated ETL workflows, and SQL analytics.
+
+TECHNICAL SKILLS
+- Languages: Python, SQL, C++, MATLAB
+- Frameworks & Libraries: Pandas, NumPy, FastAPI, Flask, PyTorch, PyTest
+- Databases: PostgreSQL, SQLite
+- Cloud & Tools: AWS S3, Docker, Git, Linux
+
+EXPERIENCE
+Data & Backend Engineer | GreenVolt Mobility (Emeryville, CA)
+2022 – Present
+- Developed automated Python data pipelines processing telemetry logs from battery management units into PostgreSQL.
+- Built internal REST endpoints in FastAPI for engineering dashboards.
+- Containerized telemetry processing scripts with Docker.
+
+Mechanical Engineer | Aerovision Labs (Fremont, CA)
+2017 – 2022
+- Led thermal simulation and structural modeling for aerospace sensor housings.
+
+EDUCATION
+B.S. in Mechanical Engineering | UC Berkeley (2013 – 2017)
+Data Science & Python Engineering Certificate | Springboard (2022)
+`;
+
+export const REAL_RESUME_6_OVERQUALIFIED = `Dr. Robert Vance, PhD
+robert.vance.ai@quantumresearch.io | (415) 555-8832 | San Francisco, CA
+
+PROFESSIONAL SUMMARY
+Principal Systems Architect & Machine Learning Researcher with 14+ years of industry and research leadership. Architected global distributed infrastructures, published 12 peer-reviewed papers in distributed computing and neural architectures.
+
+TECHNICAL MASTERY
+- Languages: Python, C++, Rust, Go, CUDA, SQL
+- Systems: Kubernetes, Distributed Consensus, High-Performance Computing, AWS, GCP
+- AI/ML: PyTorch, JAX, Distributed Training, Transformer Optimization, RAG Systems
+
+CAREER HISTORY
+Principal Architect & AI Research Lead | OmniScale Research (San Francisco, CA)
+2018 – Present
+- Led architecture for enterprise LLM distributed inference cluster serving 200M+ inferences daily.
+- Authored custom C++/CUDA kernel optimizations for transformer attention layers.
+- Directed team of 18 senior infrastructure and ML research engineers.
+
+Senior Staff Software Engineer | GlobalCloud Infrastructure
+2012 – 2018
+- Architected core distributed storage and consensus engine handling petabyte-scale streaming data.
+
+EDUCATION
+Ph.D. in Computer Science (Distributed Systems) | Stanford University (2007 – 2012)
+B.S. in Computer Science & Applied Mathematics | MIT (2003 – 2007)
+
+AWARDS & PATENTS
+- 4 US Patents in distributed database partitioning and GPU memory optimization.
+`;

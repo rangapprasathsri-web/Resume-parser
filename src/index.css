@@ -130,3 +130,38 @@
 ::-webkit-scrollbar-thumb:hover {
   background: var(--text-muted);
 }
+
+/* Print Styles for Consolidated and Audit Reports */
+@media print {
+  body {
+    background: #ffffff !important;
+    color: #1c1b1a !important;
+  }
+
+  /* Hide app navigation and sidebar during print */
+  nav,
+  aside,
+  header,
+  .no-print {
+    display: none !important;
+  }
+
+  /* Ensure report containers take full print width */
+  .print\:p-0 {
+    padding: 0 !important;
+  }
+
+  .page-break {
+    page-break-before: always !important;
+    break-before: page !important;
+  }
+
+  table {
+    page-break-inside: auto;
+  }
+
+  tr {
+    page-break-inside: avoid;
+    page-break-after: auto;
+  }
+}

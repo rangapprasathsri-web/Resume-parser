@@ -6,8 +6,10 @@ import {
   ArrowRight, 
   Sparkles,
   Check,
-  FileCheck
+  FileCheck,
+  Loader2
 } from 'lucide-react';
+import { extractTextFromFile } from '../../services/apiService';
 
 interface NewAnalysisScreenProps {
   onStartAnalysis: (resumeText: string, jdText: string, customName?: string, customRole?: string) => void;
@@ -24,6 +26,7 @@ export const NewAnalysisScreen: React.FC<NewAnalysisScreenProps> = ({
   const [isDragging, setIsDragging] = useState(false);
   const [showPasteMode, setShowPasteMode] = useState(false);
   const [fileError, setFileError] = useState<string | null>(null);
+  const [isExtractingFile, setIsExtractingFile] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const canSubmit = (resumeText.trim().length > 10) && jdText.trim().length > 10;
@@ -45,26 +48,28 @@ export const NewAnalysisScreen: React.FC<NewAnalysisScreenProps> = ({
     }
   };
 
-  const handleFileSelected = (file: File) => {
+  const handleFileSelected = async (file: File) => {
     setFileError(null);
     setFileName(file.name);
+    setIsExtractingFile(true);
 
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const content = e.target?.result as string;
-      if (content && content.trim().length > 10) {
-        setResumeText(content);
+    try {
+      const extracted = await extractTextFromFile(file);
+      if (extracted.text && extracted.text.trim().length > 10) {
+        setResumeText(extracted.text);
+        if (!candidateName) {
+          setCandidateName(file.name.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' '));
+        }
       } else {
-        // If binary or unextractable via raw text reader
-        setFileError('Could not extract plain text from this file format. Please paste the resume text directly.');
+        setFileError('Could not extract text from this file. Please paste the resume text directly.');
         setShowPasteMode(true);
       }
-    };
-    reader.onerror = () => {
-      setFileError('Failed to read file. Please paste the resume text.');
+    } catch (err: any) {
+      setFileError(err.message || 'Failed to read file. Please paste the resume text.');
       setShowPasteMode(true);
-    };
-    reader.readAsText(file);
+    } finally {
+      setIsExtractingFile(false);
+    }
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -138,11 +143,17 @@ export const NewAnalysisScreen: React.FC<NewAnalysisScreenProps> = ({
                   />
 
                   <div className="w-10 h-10 rounded-full bg-surface border border-default flex items-center justify-center text-secondary mb-3">
-                    <Upload className="w-5 h-5" strokeWidth={1.5} />
+                    {isExtractingFile ? (
+                      <Loader2 className="w-5 h-5 animate-spin text-accent" />
+                    ) : (
+                      <Upload className="w-5 h-5" strokeWidth={1.5} />
+                    )}
                   </div>
 
                   <p className="text-sm font-medium text-primary mb-1">
-                    {fileName ? (
+                    {isExtractingFile ? (
+                      'Extracting text from document...'
+                    ) : fileName ? (
                       <span className="font-mono text-accent font-semibold">{fileName}</span>
                     ) : (
                       'Drag and drop resume file'

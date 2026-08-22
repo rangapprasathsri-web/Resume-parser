@@ -183,7 +183,7 @@ function createAtsDerivedAgenticResult(
  * 4. candidateId ASC
  */
 export function rankCandidates(candidates: FinalCandidateAnalysis[]): FinalCandidateAnalysis[] {
-  return [...candidates].sort((a, b) => {
+  const sorted = [...candidates].sort((a, b) => {
     // 1. comprehensiveScore DESC
     if (b.comprehensiveScore !== a.comprehensiveScore) {
       return b.comprehensiveScore - a.comprehensiveScore;
@@ -199,4 +199,9 @@ export function rankCandidates(candidates: FinalCandidateAnalysis[]): FinalCandi
     // 4. candidateId ASC (deterministic tie-breaker)
     return a.candidateId.localeCompare(b.candidateId);
   });
+
+  return sorted.map((cand, idx) => ({
+    ...cand,
+    rank: idx + 1,
+  }));
 }

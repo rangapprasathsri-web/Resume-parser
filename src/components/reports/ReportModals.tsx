@@ -184,3 +184,5 @@ export const IndividualReportModal: React.FC<IndividualReportModalProps> = ({ ca
     </div>
   );
 };
+
+export { ConsolidatedCandidatesReportModal } from './ConsolidatedCandidatesReportModal';

@@ -8,6 +8,23 @@ export interface ExtractedDocument {
   error?: string;
 }
 
+let cachedMammothPromise: Promise<any> | null = null;
+let cachedPdfJsPromise: Promise<any> | null = null;
+
+function getMammoth() {
+  if (!cachedMammothPromise) {
+    cachedMammothPromise = import('mammoth');
+  }
+  return cachedMammothPromise;
+}
+
+function getPdfJs() {
+  if (!cachedPdfJsPromise) {
+    cachedPdfJsPromise = import('pdfjs-dist/legacy/build/pdf.mjs');
+  }
+  return cachedPdfJsPromise;
+}
+
 /**
  * Extracts plain text from TXT, Markdown, or raw string data
  */
@@ -17,7 +34,7 @@ export function extractTextFromRaw(content: string, fileName: string = 'document
     text: clean,
     wordCount: clean.split(/\s+/).filter(Boolean).length,
     fileName,
-    fileType: fileName.endsWith('.md') ? 'txt' : 'txt',
+    fileType: 'txt',
     hasTextLayer: clean.length > 0,
   };
 }
@@ -27,10 +44,10 @@ export function extractTextFromRaw(content: string, fileName: string = 'document
  */
 export async function extractTextFromDocx(buffer: Buffer, fileName: string = 'resume.docx'): Promise<ExtractedDocument> {
   try {
-    const mammoth = await import('mammoth');
+    const mammoth = await getMammoth();
     const result = await mammoth.extractRawText({ buffer });
     const text = (result.value || '').replace(/\r\n/g, '\n').trim();
-    
+
     return {
       text,
       wordCount: text.split(/\s+/).filter(Boolean).length,
@@ -56,29 +73,29 @@ export async function extractTextFromDocx(buffer: Buffer, fileName: string = 're
  */
 export async function extractTextFromPdf(buffer: Buffer, fileName: string = 'resume.pdf'): Promise<ExtractedDocument> {
   try {
-    // Dynamic import of pdfjs-dist
-    const pdfjsLib = await import('pdfjs-dist/legacy/build/pdf.mjs');
-    
+    const pdfjsLib = await getPdfJs();
+
     const uint8Array = new Uint8Array(buffer);
     const loadingTask = pdfjsLib.getDocument({
       data: uint8Array,
       useSystemFonts: true,
       disableFontFace: true,
     });
-    
+
     const pdfDocument = await loadingTask.promise;
     const numPages = pdfDocument.numPages;
-    const pageTexts: string[] = [];
+    const pagePromises: Promise<string>[] = [];
 
     for (let i = 1; i <= numPages; i++) {
-      const page = await pdfDocument.getPage(i);
-      const textContent = await page.getTextContent();
-      const pageStrings = textContent.items
-        .map((item: any) => (item.str ? item.str : ''))
-        .join(' ');
-      pageTexts.push(pageStrings);
+      pagePromises.push(
+        pdfDocument.getPage(i).then(async (page: any) => {
+          const textContent = await page.getTextContent();
+          return textContent.items.map((item: any) => (item.str ? item.str : '')).join(' ');
+        })
+      );
     }
 
+    const pageTexts = await Promise.all(pagePromises);
     const fullText = pageTexts.join('\n\n').replace(/\r\n/g, '\n').trim();
     const wordCount = fullText.split(/\s+/).filter(Boolean).length;
     const hasTextLayer = wordCount > 15;

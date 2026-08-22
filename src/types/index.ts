@@ -200,6 +200,7 @@ export interface FinalCandidateAnalysis {
   matchedRequirementsCount: number;
   totalRequirementsCount: number;
   relevanceSummary: string;
+  rank?: number;
 }
 
 export interface ParsedRequirement {

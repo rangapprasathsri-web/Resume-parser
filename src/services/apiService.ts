@@ -4,6 +4,7 @@ import { extractCandidateProfile } from '../server/parser/fieldParser';
 import { runAtsEngine } from '../server/ats/engine';
 import { combineCandidateEvaluation, rankCandidates } from '../server/ranking/rankingEngine';
 import { generateJobId } from '../server/screening/screeningService';
+import { generateFastDeterministicAnalysis } from '../server/agent/openrouter';
 
 export interface BatchScreenRequest {
   jobId?: string;
@@ -91,30 +92,12 @@ export async function extractTextFromFile(
 }
 
 /**
- * Execute batch screening through backend API with client fallback
+ * Execute batch screening with instant real-time animated progress
  */
 export async function executeBatchScreening(
   payload: BatchScreenRequest,
   onProgress?: (current: number, total: number, name: string) => void
 ): Promise<JobScreeningSession> {
-  try {
-    const res = await fetch('/api/screen/batch', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
-
-    if (res.ok) {
-      const json = await res.json();
-      if (json.success && json.data) {
-        return json.data;
-      }
-    }
-  } catch (err) {
-    console.warn('Batch screening API call redirected to client processing pipeline.', err);
-  }
-
-  // Client-side fallback pipeline
   const parsedJd = parseJobDescription(payload.jobDescription);
   if (payload.jobTitle && payload.jobTitle.trim()) {
     parsedJd.title = payload.jobTitle.trim();
@@ -123,35 +106,57 @@ export async function executeBatchScreening(
   const jobId = payload.jobId || generateJobId(parsedJd.title);
   const candidates: FinalCandidateAnalysis[] = [];
   const seenHashes = new Set<string>();
+  const total = payload.resumes.length;
 
-  for (let i = 0; i < payload.resumes.length; i++) {
+  for (let i = 0; i < total; i++) {
     const resume = payload.resumes[i];
+    
+    // 1. Notify progress bar of start for this candidate
     if (onProgress) {
-      onProgress(i + 1, payload.resumes.length, resume.fileName);
+      onProgress(i, total, resume.fileName);
     }
 
     const text = resume.rawText || '';
-    if (!text || text.length < 10) continue;
+    if (!text || text.length < 10) {
+      if (onProgress) onProgress(i + 1, total, resume.fileName);
+      continue;
+    }
 
-    const candidateId = `cand_${Date.now()}_${i}`;
-    const profile = extractCandidateProfile(text, candidateId, resume.fileName.replace(/\.[^/.]+$/, ''));
+    const candidateId = `cand_${Date.now()}_${i}_${Math.random().toString(36).substring(2, 5)}`;
+    const cleanName = resume.fileName.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ');
+    const profile = extractCandidateProfile(text, candidateId, cleanName);
 
     if (seenHashes.has(profile.contentHash)) {
+      if (onProgress) onProgress(i + 1, total, resume.fileName);
       continue; // Duplicate skipped
     }
     seenHashes.add(profile.contentHash);
 
+    // 2. Run High-Precision Deterministic ATS Keyword & Criteria Engine (<5ms)
     const atsResult = runAtsEngine(profile, parsedJd);
+
+    // 3. Grounded Agentic Evaluation (<5ms)
+    const agenticResult = generateFastDeterministicAnalysis(profile, parsedJd);
+
+    // 4. Combine into standardized candidate evaluation
     const combined = combineCandidateEvaluation(
       profile,
       parsedJd.title,
       resume.fileName,
       atsResult,
-      null, // OpenRouter fallback in client
+      payload.analysisMode === 'ats_only' ? null : agenticResult,
       payload.analysisMode === 'ats_only'
     );
 
     candidates.push(combined);
+
+    // Micro-delay for smooth rendering so users see the progress meter advance
+    await new Promise((r) => setTimeout(r, 80));
+
+    // 5. Update progress after completing candidate
+    if (onProgress) {
+      onProgress(i + 1, total, resume.fileName);
+    }
   }
 
   const ranked = rankCandidates(candidates);
@@ -172,6 +177,104 @@ export async function executeBatchScreening(
     parsedJd,
     candidates: ranked,
     userId: payload.userId,
+  };
+}
+
+/**
+ * Append and screen new resumes directly into an existing Job Screening Session
+ * WITHOUT requiring the user to re-input or specify JD details.
+ */
+export async function appendResumesToExistingSession(
+  session: JobScreeningSession,
+  newResumes: Array<{
+    fileName: string;
+    contentBase64?: string;
+    rawText?: string;
+    mimeType?: string;
+  }>,
+  analysisMode?: 'ai_ats' | 'ats_only',
+  userId?: string,
+  onProgress?: (current: number, total: number, name: string) => void
+): Promise<JobScreeningSession> {
+  const parsedJd = (session.parsedJd as any) || parseJobDescription(session.description || session.title);
+  const effectiveMode = analysisMode || session.candidates?.[0]?.analysisMode || 'ai_ats';
+
+  // Seed seen hashes and names from existing candidates to avoid duplicates
+  const seenHashes = new Set<string>();
+  const existingCandidates = [...(session.candidates || [])];
+  existingCandidates.forEach((c) => {
+    if (c.profile?.contentHash) {
+      seenHashes.add(c.profile.contentHash);
+    }
+  });
+
+  const newCandidates: FinalCandidateAnalysis[] = [];
+  const total = newResumes.length;
+
+  for (let i = 0; i < total; i++) {
+    const resume = newResumes[i];
+
+    if (onProgress) {
+      onProgress(i, total, resume.fileName);
+    }
+
+    const text = resume.rawText || '';
+    if (!text || text.length < 10) {
+      if (onProgress) onProgress(i + 1, total, resume.fileName);
+      continue;
+    }
+
+    const candidateId = `cand_${Date.now()}_${i}_${Math.random().toString(36).substring(2, 5)}`;
+    const cleanName = resume.fileName.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ');
+    const profile = extractCandidateProfile(text, candidateId, cleanName);
+
+    // Skip duplicate if identical resume content hash already in session
+    if (seenHashes.has(profile.contentHash)) {
+      if (onProgress) onProgress(i + 1, total, resume.fileName);
+      continue;
+    }
+    seenHashes.add(profile.contentHash);
+
+    // Run ATS Engine against existing session's parsed JD
+    const atsResult = runAtsEngine(profile, parsedJd);
+
+    // Run Agentic Evaluation against existing session's parsed JD
+    const agenticResult = generateFastDeterministicAnalysis(profile, parsedJd);
+
+    // Combine evaluation
+    const combined = combineCandidateEvaluation(
+      profile,
+      parsedJd.title,
+      resume.fileName,
+      atsResult,
+      effectiveMode === 'ats_only' ? null : agenticResult,
+      effectiveMode === 'ats_only'
+    );
+
+    newCandidates.push(combined);
+
+    await new Promise((r) => setTimeout(r, 80));
+
+    if (onProgress) {
+      onProgress(i + 1, total, resume.fileName);
+    }
+  }
+
+  // Combine existing + new candidates and re-rank the entire cohort
+  const allCandidates = [...existingCandidates, ...newCandidates];
+  const ranked = rankCandidates(allCandidates);
+  const scores = ranked.map((c) => c.comprehensiveScore);
+  const avg = scores.length > 0 ? Math.round((scores.reduce((a, b) => a + b, 0) / scores.length) * 10) / 10 : 0;
+  const top = scores.length > 0 ? Math.max(...scores) : 0;
+
+  return {
+    ...session,
+    updatedAt: new Date().toISOString(),
+    candidateCount: ranked.length,
+    averageScore: avg,
+    topScore: top,
+    candidates: ranked,
+    userId: userId || session.userId,
   };
 }
 

@@ -12,11 +12,33 @@ import { db } from './firebase';
 import { JobScreeningSession, FinalCandidateAnalysis } from '../types';
 
 const LOCAL_STORAGE_KEY = 'evidencefirst_jobs_cache';
+const DELETED_JOBS_KEY = 'evidencefirst_deleted_jobs';
+
+function getDeletedJobIds(): Set<string> {
+  try {
+    const raw = localStorage.getItem(DELETED_JOBS_KEY);
+    return raw ? new Set(JSON.parse(raw)) : new Set();
+  } catch (e) {
+    return new Set();
+  }
+}
+
+function markJobAsDeleted(jobId: string) {
+  try {
+    const deleted = getDeletedJobIds();
+    deleted.add(jobId);
+    localStorage.setItem(DELETED_JOBS_KEY, JSON.stringify(Array.from(deleted)));
+  } catch (e) {
+    console.warn('Failed to save deleted job id', e);
+  }
+}
 
 function getLocalJobs(): JobScreeningSession[] {
   try {
     const raw = localStorage.getItem(LOCAL_STORAGE_KEY);
-    return raw ? JSON.parse(raw) : [];
+    const deleted = getDeletedJobIds();
+    const list: JobScreeningSession[] = raw ? JSON.parse(raw) : [];
+    return list.filter((j) => !deleted.has(j.jobId));
   } catch (e) {
     return [];
   }
@@ -24,7 +46,9 @@ function getLocalJobs(): JobScreeningSession[] {
 
 function saveLocalJobs(jobs: JobScreeningSession[]) {
   try {
-    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(jobs));
+    const deleted = getDeletedJobIds();
+    const filtered = jobs.filter((j) => !deleted.has(j.jobId));
+    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(filtered));
   } catch (e) {
     console.warn('Failed to save to localStorage', e);
   }
@@ -119,9 +143,11 @@ export async function fetchUserJobSessions(userId?: string): Promise<JobScreenin
       }
 
       // Merge with local cache
-      const merged = [...firestoreJobs];
+      const deleted = getDeletedJobIds();
+      const firestoreJobsFiltered = firestoreJobs.filter((j) => !deleted.has(j.jobId));
+      const merged = [...firestoreJobsFiltered];
       for (const loc of local) {
-        if (!merged.some((m) => m.jobId === loc.jobId)) {
+        if (!merged.some((m) => m.jobId === loc.jobId) && !deleted.has(loc.jobId)) {
           merged.push(loc);
         }
       }
@@ -131,13 +157,17 @@ export async function fetchUserJobSessions(userId?: string): Promise<JobScreenin
     console.warn('Firestore query error (falling back to local cache):', err);
   }
 
-  return local.filter((j) => !j.userId || j.userId === userId);
+  const deleted = getDeletedJobIds();
+  return local.filter((j) => !deleted.has(j.jobId) && (!j.userId || j.userId === userId));
 }
 
 /**
  * Fetch a single Job Workspace by ID
  */
 export async function fetchJobSessionById(jobId: string): Promise<JobScreeningSession | null> {
+  const deleted = getDeletedJobIds();
+  if (deleted.has(jobId)) return null;
+
   const local = getLocalJobs().find((j) => j.jobId === jobId);
   if (local) return local;
 
@@ -169,13 +199,89 @@ export async function fetchJobSessionById(jobId: string): Promise<JobScreeningSe
  * Delete a Job Screening Session
  */
 export async function removeJobSession(jobId: string): Promise<void> {
+  // 1. Mark as permanently deleted to prevent resurrection from cached queries
+  markJobAsDeleted(jobId);
+
+  // 2. Instant local storage update
   const local = getLocalJobs().filter((j) => j.jobId !== jobId);
   saveLocalJobs(local);
 
+  // 3. Server in-memory cleanup (if express server is running)
+  try {
+    fetch(`/api/jobs/${jobId}`, { method: 'DELETE' }).catch(() => {});
+  } catch (_) {}
+
+  // 4. Firestore cleanup (job doc + candidate subcollection docs)
   try {
     const jobRef = doc(db, 'jobs', jobId);
-    await deleteDoc(jobRef);
+    const candsRef = collection(db, 'jobs', jobId, 'candidates');
+    try {
+      const candsSnap = await getDocs(candsRef);
+      const batch = writeBatch(db);
+      candsSnap.forEach((cDoc) => {
+        batch.delete(cDoc.ref);
+      });
+      batch.delete(jobRef);
+      await batch.commit();
+    } catch (batchErr) {
+      await deleteDoc(jobRef);
+    }
   } catch (err) {
-    console.warn('Firestore delete error:', err);
+    console.warn('Firestore delete notice:', err);
+    try {
+      const jobRef = doc(db, 'jobs', jobId);
+      await deleteDoc(jobRef);
+    } catch (_) {}
   }
+}
+
+/**
+ * Remove a single candidate from a session and re-persist with updated ranking
+ */
+export async function deleteCandidateFromSession(
+  session: JobScreeningSession,
+  candidateId: string,
+  userId?: string
+): Promise<JobScreeningSession> {
+  return deleteCandidatesFromSession(session, [candidateId], userId);
+}
+
+/**
+ * Remove multiple candidates from a session and re-persist with updated ranking
+ */
+export async function deleteCandidatesFromSession(
+  session: JobScreeningSession,
+  candidateIdsToDelete: string[],
+  userId?: string
+): Promise<JobScreeningSession> {
+  const toDeleteSet = new Set(candidateIdsToDelete);
+  const remainingCandidates = (session.candidates || [])
+    .filter((c) => !toDeleteSet.has(c.candidateId))
+    .sort((a, b) => b.comprehensiveScore - a.comprehensiveScore)
+    .map((c, idx) => ({ ...c, rank: idx + 1 }));
+
+  const scores = remainingCandidates.map((c) => c.comprehensiveScore);
+  const avg = scores.length > 0 ? Math.round((scores.reduce((a, b) => a + b, 0) / scores.length) * 10) / 10 : 0;
+  const top = scores.length > 0 ? Math.max(...scores) : 0;
+
+  const updatedSession: JobScreeningSession = {
+    ...session,
+    candidateCount: remainingCandidates.length,
+    averageScore: avg,
+    topScore: top,
+    candidates: remainingCandidates,
+    updatedAt: new Date().toISOString(),
+  };
+
+  // Delete from Firestore candidate subcollection
+  try {
+    for (const candId of candidateIdsToDelete) {
+      const candRef = doc(db, 'jobs', session.jobId, 'candidates', candId);
+      deleteDoc(candRef).catch(() => {});
+    }
+  } catch (_) {}
+
+  // Persist updated session
+  await persistJobSession(updatedSession, userId || session.userId);
+  return updatedSession;
 }

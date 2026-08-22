@@ -13,11 +13,12 @@ import { BatchProcessingScreen } from './components/processing/BatchProcessingSc
 import { JobWorkspaceView } from './components/workspace/JobWorkspaceView';
 import { CandidateDetailView } from './components/candidate/CandidateDetailView';
 import { BatchReportModal, IndividualReportModal } from './components/reports/ReportModals';
-import { executeBatchScreening } from './services/apiService';
+import { executeBatchScreening, appendResumesToExistingSession } from './services/apiService';
 import {
   fetchUserJobSessions,
   persistJobSession,
   removeJobSession,
+  deleteCandidateFromSession,
 } from './services/jobStorageService';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { LoginScreen } from './components/auth/LoginScreen';
@@ -140,9 +141,72 @@ function MainApp() {
     } catch (err: any) {
       console.error('Batch screening encountered error:', err);
       setProcessingState(null);
-      alert(`Screening error: ${err.message || 'Failed to complete batch.'}`);
       setCurrentView('new_screening');
     }
+  };
+
+  // Append new resumes to an existing session (Zero JD prompts)
+  const handleAppendResumes = async (
+    targetSession: JobScreeningSession,
+    newResumes: Array<{ fileName: string; rawText: string }>,
+    analysisMode?: 'ai_ats' | 'ats_only'
+  ) => {
+    setProcessingState({
+      jobTitle: targetSession.title,
+      total: newResumes.length,
+      completed: 0,
+      currentName: newResumes[0]?.fileName || 'Screening...',
+    });
+
+    try {
+      const updatedSession = await appendResumesToExistingSession(
+        targetSession,
+        newResumes,
+        analysisMode,
+        user?.uid,
+        (current, total, name) => {
+          setProcessingState({
+            jobTitle: targetSession.title,
+            total,
+            completed: current,
+            currentName: name,
+          });
+        }
+      );
+
+      await persistJobSession(updatedSession, user?.uid);
+
+      setSessions((prev) => {
+        const idx = prev.findIndex((s) => s.jobId === updatedSession.jobId);
+        if (idx >= 0) {
+          const next = [...prev];
+          next[idx] = updatedSession;
+          return next;
+        }
+        return [updatedSession, ...prev];
+      });
+
+      setActiveSession(updatedSession);
+      setProcessingState(null);
+      setCurrentView('job_workspace');
+    } catch (err: any) {
+      console.error('Failed to append resumes to session:', err);
+      setProcessingState(null);
+    }
+  };
+
+  const handleSessionUpdated = async (updatedSession: JobScreeningSession) => {
+    setActiveSession(updatedSession);
+    setSessions((prev) => {
+      const idx = prev.findIndex((s) => s.jobId === updatedSession.jobId);
+      if (idx >= 0) {
+        const next = [...prev];
+        next[idx] = updatedSession;
+        return next;
+      }
+      return [updatedSession, ...prev];
+    });
+    await persistJobSession(updatedSession, user?.uid);
   };
 
   const handleSelectSession = (jobId: string) => {
@@ -154,14 +218,30 @@ function MainApp() {
   };
 
   const handleDeleteSession = async (jobId: string) => {
-    await removeJobSession(jobId);
     setSessions((prev) => prev.filter((s) => s.jobId !== jobId));
-    if (activeSession?.jobId === jobId) {
-      const remaining = sessions.filter((s) => s.jobId !== jobId);
-      setActiveSession(remaining.length > 0 ? remaining[0] : null);
-      if (remaining.length === 0) {
-        setCurrentView('dashboard');
-      }
+    setActiveSession((prev) => {
+      if (prev?.jobId === jobId) return null;
+      return prev;
+    });
+    if (activeSession?.jobId === jobId || currentView === 'job_workspace' || currentView === 'candidate_detail') {
+      setCurrentView('dashboard');
+    }
+    try {
+      await removeJobSession(jobId);
+    } catch (e) {
+      console.error('Failed to remove job session from storage:', e);
+    }
+  };
+
+  const handleDeleteCandidateFromDetail = async (candidateId: string) => {
+    if (!activeSession) return;
+    try {
+      const updated = await deleteCandidateFromSession(activeSession, candidateId, user?.uid);
+      await handleSessionUpdated(updated);
+      setSelectedCandidate(null);
+      setCurrentView('job_workspace');
+    } catch (e) {
+      console.error('Failed to delete candidate:', e);
     }
   };
 
@@ -252,14 +332,18 @@ function MainApp() {
                 onNewScreening={() => setCurrentView('new_screening')}
                 onSelectSession={handleSelectSession}
                 onDeleteSession={handleDeleteSession}
+                onUpdateSession={handleSessionUpdated}
               />
             )}
 
-            {/* View 2: Create Screening Workspace */}
+            {/* View 2: Create Screening Workspace or Add Resumes */}
             {!processingState && currentView === 'new_screening' && (
               <NewBatchScreeningScreen
                 onStartScreening={handleStartScreening}
-                onCancel={() => setCurrentView('dashboard')}
+                onAppendToExistingSession={handleAppendResumes}
+                existingSessions={sessions}
+                initialSessionId={activeSession?.jobId}
+                onCancel={() => setCurrentView(activeSession ? 'job_workspace' : 'dashboard')}
               />
             )}
 
@@ -268,7 +352,8 @@ function MainApp() {
               <JobWorkspaceView
                 session={activeSession}
                 onSelectCandidate={handleSelectCandidate}
-                onAddResumes={() => setCurrentView('new_screening')}
+                onUpdateSession={handleSessionUpdated}
+                onDeleteSession={handleDeleteSession}
                 onBack={() => setCurrentView('dashboard')}
                 onExportReport={() => setIsBatchReportOpen(true)}
               />
@@ -280,6 +365,7 @@ function MainApp() {
                 candidate={selectedCandidate}
                 onBack={() => setCurrentView('job_workspace')}
                 onExportReport={() => setIsIndividualReportOpen(true)}
+                onDeleteCandidate={handleDeleteCandidateFromDetail}
               />
             )}
           </main>

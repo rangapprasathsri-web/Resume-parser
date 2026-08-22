@@ -18,6 +18,8 @@ import {
   Layers,
   Code,
   ShieldCheck,
+  Trash2,
+  AlertTriangle,
 } from 'lucide-react';
 import { FinalCandidateAnalysis, RecommendationTier } from '../../types';
 
@@ -25,14 +27,24 @@ interface CandidateDetailViewProps {
   candidate: FinalCandidateAnalysis;
   onBack: () => void;
   onExportReport: () => void;
+  onDeleteCandidate?: (candidateId: string) => void;
 }
 
 export const CandidateDetailView: React.FC<CandidateDetailViewProps> = ({
   candidate,
   onBack,
   onExportReport,
+  onDeleteCandidate,
 }) => {
   const [activeTab, setActiveTab] = useState<'evaluation' | 'profile' | 'raw'>('evaluation');
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+
+  const handleConfirmDelete = () => {
+    if (onDeleteCandidate) {
+      onDeleteCandidate(candidate.candidateId);
+    }
+    setIsDeleteModalOpen(false);
+  };
 
   const getTierBadge = (tier: RecommendationTier) => {
     switch (tier) {
@@ -100,8 +112,20 @@ export const CandidateDetailView: React.FC<CandidateDetailViewProps> = ({
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-[6px] bg-accent hover:bg-accent-hover text-white text-xs font-medium transition-colors cursor-pointer shadow-sm"
           >
             <Download className="w-3.5 h-3.5" />
-            <span>Export Candidate Report</span>
+            <span>Export Report</span>
           </button>
+
+          {onDeleteCandidate && (
+            <button
+              type="button"
+              onClick={() => setIsDeleteModalOpen(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-[6px] border border-red-200 dark:border-red-900/60 bg-red-50 hover:bg-red-100 dark:bg-red-950/40 dark:hover:bg-red-900/50 text-red-600 dark:text-red-400 text-xs font-medium transition-colors cursor-pointer shadow-xs"
+              title="Remove candidate from this session"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>Remove Candidate</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -360,8 +384,8 @@ export const CandidateDetailView: React.FC<CandidateDetailViewProps> = ({
                 <div>
                   <div className="text-[11px] font-mono text-muted mb-1">PROGRAMMING LANGUAGES:</div>
                   <div className="flex flex-wrap gap-1.5">
-                    {candidate.profile.programmingLanguages.length > 0 ? (
-                      candidate.profile.programmingLanguages.map((l, i) => (
+                    {(candidate.profile?.programmingLanguages || []).length > 0 ? (
+                      (candidate.profile?.programmingLanguages || []).map((l, i) => (
                         <span key={i} className="px-2 py-0.5 rounded bg-surface-sunken border border-default font-mono text-primary">
                           {l}
                         </span>
@@ -375,8 +399,8 @@ export const CandidateDetailView: React.FC<CandidateDetailViewProps> = ({
                 <div>
                   <div className="text-[11px] font-mono text-muted mb-1">FRAMEWORKS & LIBRARIES:</div>
                   <div className="flex flex-wrap gap-1.5">
-                    {candidate.profile.frameworks.length > 0 ? (
-                      candidate.profile.frameworks.map((f, i) => (
+                    {(candidate.profile?.frameworks || []).length > 0 ? (
+                      (candidate.profile?.frameworks || []).map((f, i) => (
                         <span key={i} className="px-2 py-0.5 rounded bg-surface-sunken border border-default font-mono text-primary">
                           {f}
                         </span>
@@ -390,8 +414,8 @@ export const CandidateDetailView: React.FC<CandidateDetailViewProps> = ({
                 <div>
                   <div className="text-[11px] font-mono text-muted mb-1">DATABASES & STORAGE:</div>
                   <div className="flex flex-wrap gap-1.5">
-                    {candidate.profile.databases.length > 0 ? (
-                      candidate.profile.databases.map((db, i) => (
+                    {(candidate.profile?.databases || []).length > 0 ? (
+                      (candidate.profile?.databases || []).map((db, i) => (
                         <span key={i} className="px-2 py-0.5 rounded bg-surface-sunken border border-default font-mono text-primary">
                           {db}
                         </span>
@@ -405,8 +429,8 @@ export const CandidateDetailView: React.FC<CandidateDetailViewProps> = ({
                 <div>
                   <div className="text-[11px] font-mono text-muted mb-1">CLOUD & DEVOPS:</div>
                   <div className="flex flex-wrap gap-1.5">
-                    {candidate.profile.cloudDevOps.length > 0 ? (
-                      candidate.profile.cloudDevOps.map((c, i) => (
+                    {(candidate.profile?.cloudDevOps || []).length > 0 ? (
+                      (candidate.profile?.cloudDevOps || []).map((c, i) => (
                         <span key={i} className="px-2 py-0.5 rounded bg-surface-sunken border border-default font-mono text-primary">
                           {c}
                         </span>
@@ -431,8 +455,8 @@ export const CandidateDetailView: React.FC<CandidateDetailViewProps> = ({
               <div className="space-y-4 text-xs">
                 <div>
                   <div className="text-[11px] font-mono text-muted mb-1">DEGREES & INSTITUTIONS:</div>
-                  {candidate.profile.education.length > 0 ? (
-                    candidate.profile.education.map((edu, i) => (
+                  {(candidate.profile?.education || []).length > 0 ? (
+                    (candidate.profile?.education || []).map((edu, i) => (
                       <div key={i} className="p-2 rounded bg-surface-sunken border border-default space-y-0.5 mb-2">
                         <div className="font-semibold text-primary">{edu.degree}</div>
                         <div className="text-secondary font-sans">{edu.institution}</div>
@@ -445,9 +469,9 @@ export const CandidateDetailView: React.FC<CandidateDetailViewProps> = ({
 
                 <div>
                   <div className="text-[11px] font-mono text-muted mb-1">CERTIFICATIONS:</div>
-                  {candidate.profile.certifications.length > 0 ? (
+                  {(candidate.profile?.certifications || []).length > 0 ? (
                     <div className="space-y-1">
-                      {candidate.profile.certifications.map((c, i) => (
+                      {(candidate.profile?.certifications || []).map((c, i) => (
                         <div key={i} className="p-1.5 rounded bg-surface-sunken border border-default font-mono text-primary">
                           {c}
                         </div>
@@ -471,8 +495,8 @@ export const CandidateDetailView: React.FC<CandidateDetailViewProps> = ({
             </div>
 
             <div className="space-y-3">
-              {candidate.profile.workExperience.length > 0 ? (
-                candidate.profile.workExperience.map((exp, i) => (
+              {(candidate.profile?.workExperience || []).length > 0 ? (
+                (candidate.profile?.workExperience || []).map((exp, i) => (
                   <div key={i} className="p-3.5 rounded-[6px] border border-default bg-surface-sunken space-y-1">
                     <div className="font-semibold text-primary text-xs">{exp.title}</div>
                     <div className="text-[11px] font-mono text-secondary">{exp.company}</div>
@@ -501,6 +525,42 @@ export const CandidateDetailView: React.FC<CandidateDetailViewProps> = ({
           <pre className="p-4 rounded-[6px] bg-surface-sunken border border-default text-xs font-mono text-primary overflow-x-auto whitespace-pre-wrap leading-relaxed max-h-[600px] overflow-y-auto">
             {candidate.profile.rawText}
           </pre>
+        </div>
+      )}
+
+      {/* Delete Candidate Confirmation Modal */}
+      {isDeleteModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-surface border border-default rounded-[10px] max-w-md w-full p-5 space-y-4 shadow-xl animate-in fade-in zoom-in-95">
+            <div className="flex items-start gap-3">
+              <div className="w-9 h-9 rounded-full bg-status-missing/10 text-status-missing flex items-center justify-center shrink-0">
+                <AlertTriangle className="w-5 h-5" />
+              </div>
+              <div className="space-y-1">
+                <h3 className="text-base font-semibold text-primary">Remove Candidate?</h3>
+                <p className="text-xs text-secondary font-sans">
+                  Are you sure you want to remove <span className="font-semibold text-primary">"{candidate.candidateName}"</span> from this screening workspace? This action cannot be undone.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-default">
+              <button
+                type="button"
+                onClick={() => setIsDeleteModalOpen(false)}
+                className="px-3 py-1.5 rounded-[6px] border border-default text-secondary hover:text-primary text-xs font-medium transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDelete}
+                className="px-3.5 py-1.5 rounded-[6px] bg-status-missing hover:bg-red-600 text-white text-xs font-medium transition-colors cursor-pointer shadow-sm"
+              >
+                Remove Candidate
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
